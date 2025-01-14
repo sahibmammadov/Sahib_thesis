@@ -8,10 +8,11 @@ user_id = 1
 
 logging.basicConfig(level=logging.INFO)
 known_faces = {}
+user_dict = {}
 def preprocess_face(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    equalized = cv2.equalizeHist(gray)  
-    return cv2.cvtColor(equalized, cv2.COLOR_GRAY2BGR)  
+    equalized = cv2.equalizeHist(gray)
+    return cv2.cvtColor(equalized, cv2.COLOR_GRAY2BGR)
 
 def normalize_emotions(emotion_data):
     emotions = ['happy', 'neutral', 'sad', 'angry', 'surprise']
@@ -24,12 +25,17 @@ def normalize_emotions(emotion_data):
     return choosed_emotions
 
 def find_matching_user(face_embedding):
-    """Find a matching user based on face embedding."""
     for user, embedding in known_faces.items():
         distance = np.linalg.norm(embedding - np.array(face_embedding))
-        if distance < 10: 
+        if distance < 10:
             return user
     return None
+
+def extract_analysis_result(analysis):
+    if isinstance(analysis, list):
+        return analysis[0] if analysis else {}
+    return analysis
+
 def start_camera_detection():
     global user_id
     video_capture = cv2.VideoCapture(0)
@@ -42,7 +48,7 @@ def start_camera_detection():
 
         frame = cv2.flip(frame, 1)
 
-        max_dimension = 800  
+        max_dimension = 800
         height, width = frame.shape[:2]
         if max(height, width) > max_dimension:
             scale_factor = max_dimension / max(height, width)
@@ -62,29 +68,42 @@ def start_camera_detection():
             face_rg = preprocess_face(face_rg)
 
             try:
-                analysis = DeepFace.analyze(face_rg, actions=['emotion', 'gender', 'age'], enforce_detection=False, detector_backend='mtcnn')
-                
+                analysis = DeepFace.analyze(face_rg, actions=['emotion'], enforce_detection=False, detector_backend='mtcnn')
+                analysis = extract_analysis_result(analysis)
+
                 result = DeepFace.represent(frame, model_name="Facenet")
                 face_embedding = result[0]['embedding']
                 matched_user = find_matching_user(face_embedding)
-                if isinstance(analysis, list) and len(analysis) > 0:
-                        analysis = analysis[0] 
-                if matched_user:
-                        print(f"Welcome back, User {matched_user}!")
-                        
-                else:
-                        print(f"Hello, User {user_id}!")
-                        known_faces[user_id] = np.array(face_embedding)
-                        user_id += 1
-        
-                        gender = analysis.get('dominant_gender', 'Unknown')
-                        confidence = analysis.get('gender', {})
-                        logging.info(f"Detected gender: {gender}, Confidence: {confidence}")
-                        m_w = " ".join(gender)
-                        gender = m_w.split()[0]  
-                        age = max(1, min(99, int(analysis.get('age', 0)))) - 3 
-                        
 
+
+                if matched_user:
+                    print(f"Welcome back, User {matched_user}!")
+                    gender = user_dict[matched_user][0]
+                    age = user_dict[matched_user][1]
+                else:
+                    additional_analysis = DeepFace.analyze(face_rg, actions=['gender', 'age'], enforce_detection=False, detector_backend='mtcnn')
+                    additional_analysis = extract_analysis_result(additional_analysis)
+
+                    print(f"Hello, User {user_id}!")
+                    known_faces[user_id] = np.array(face_embedding)
+                    user_id += 1
+
+                    gender = additional_analysis.get('dominant_gender', 'Unknown')
+                    confidence = additional_analysis.get('gender', {})
+                    logging.info(f"Detected gender: {gender}, Confidence: {confidence}")
+                    m_w = " ".join(gender)
+                    gender = m_w.split()[0]
+                    age = max(1, min(99, int(additional_analysis.get('age', 0)))) - 3
+                    if age >= 18:
+                        age = 'adult'
+                    elif 14 < age < 18:
+                        age = 'teenager'
+                    else:
+                        age = 'child'
+                    
+                    user_dict[user_id - 1] = [gender, age]
+                    
+                    
                 emotions = normalize_emotions(analysis.get('emotion', {}))
                 pr_emotion = max(emotions, key=emotions.get)
                 rate = emotions[pr_emotion]
@@ -94,7 +113,7 @@ def start_camera_detection():
                 cv2.putText(frame, f"Dominant: {pr_emotion} ({rate:.2f}) [{gender}]", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (36, 255, 12), 2)
                 cv2.putText(frame, emotion_text, (x, y+h+30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 1)
                 cv2.putText(frame, f"Age: {age}", (x, y+h+60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
+                print(user_dict)
             except Exception as e:
                 logging.error(f"Detection failed: {e}")
 
