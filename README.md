@@ -18,3 +18,33 @@ dlib: 19.24.1
 numpy: 1.26.4
 opencv-python: 4.11.0.86
 face_recognition: 1.3.0
+##  Requirements
+
+- Python 3.8 or 3.9 (recommended)
+- pip
+- Visual Studio Build Tools 
+- A virtual environment (optional but recommended)
+
+---
+
+## Installation Steps
+
+---
+
+pip install --upgrade pip
+
+pip install numpy==1.26.4
+
+pip install opencv-python==4.11.0.86
+
+pip install dlib==19.24.1
+
+pip install face_recognition==1.3.0
+
+pip install deepface==0.0.93
+
+
+If dlib fails to install:
+
+
+pip install dlib==19.24.1 --no-cache-dir
